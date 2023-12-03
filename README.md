@@ -6,6 +6,8 @@ client
 - react-router-dom
 - bootstrap
 - react-bootstrap
+- socket.io-client
+
 server
 - npm i joi@13.1.0
 - npm i express
@@ -13,3 +15,4 @@ server
 - npm i body-parser
 - npm i fs
 - npm i path
+- npm i socket.io
