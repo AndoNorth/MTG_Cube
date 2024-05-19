@@ -23,7 +23,7 @@ class Card {
   constructor(id, name){
     this.m_id = id;
     this.m_name = name;
-    this.m_owner = 0;
+    this.m_owner_id = 0;
     this.m_pack_id = 0;
     this.m_id_in_pack = 0;
     this.m_pick_no = 0;
@@ -41,12 +41,13 @@ class Pack {
       card.m_id_in_pack = this.m_cards.length;
     }
     chooseCardWithId(id) {
-      chosen_card = this.m_cards.find(card => card.m_id_in_pack === id);
+      const chosen_card = this.m_cards.find(card => card.m_id_in_pack === id);
       this.m_chosen_cards.push(chosen_card);
       chosen_card.m_pick_no = this.m_chosen_cards.length;
+      return chosen_card;
     }
     cardsLeft(){
-      cards_left = this.m_cards.filter(card => !this.m_chosen_cards.includes(card));
+      const cards_left = this.m_cards.filter(card => !this.m_chosen_cards.includes(card));
       return cards_left;
     }
 }
@@ -58,6 +59,12 @@ class Player {
     this.m_is_bot = is_bot;
     this.m_drafted_cards = [];
   }
+
+  pickCard(pack, id){
+    const card = pack.chooseCardWithId(id);
+    this.m_drafted_cards.push(card);
+    card.m_owner_id = this.m_id;
+  }
 }
 
 class DraftingSession {
@@ -67,13 +74,17 @@ class DraftingSession {
     this.m_no_packs = no_packs;
     this.m_no_players = Math.min(no_players, MAX_NO_PLAYERS); // TODO@CONSIDER: separate logic and trigger log
     this.m_time_limit = 30;
+    this.m_random_seed = 50292030;
     // dynamic
     this.m_players = [];
     this.m_card_pool = [];
     this.m_draft_pool = [];
     this.m_packs = [];
   }
-
+  /**
+   * @brief setup session, by organizing the card pool, draft pool,
+   * players and packs
+   */
   createSession() {
     this.loadCards();
     const min_no_cards = this.m_pack_size * this.m_no_packs * this.m_no_players;
@@ -81,16 +92,17 @@ class DraftingSession {
       console.log('not enough cards in pool to start draft');
       return;
     }
-    var seed = 50292030;
-    var shuffled_card_pool = seededShuffle(this.m_card_pool, seed);
+    var shuffled_card_pool = seededShuffle(this.m_card_pool, this.m_random_seed);
     // slice shuffled pool to size
     this.m_draft_pool = shuffled_card_pool.slice(0, min_no_cards);
 
     this.initializePlayers();
-
+    
     this.m_packs = this.initializePacks(this.m_draft_pool);
   }
-
+  /**
+   * @brief loads list of cards from file into card pool
+   */
   loadCards() {
     const filename = "PauperCubeInitial_20231126.txt";
     const file = path.join("../local/", filename);
@@ -107,7 +119,9 @@ class DraftingSession {
       this.m_card_pool.push(card);
     });
   };
-
+  /**
+   * @brief initialize list of players
+   */
   initializePlayers() {
     for (let i = 0; i < this.m_no_players; i++) {
       const player_name = `Player ${i + 1}`;
@@ -115,7 +129,12 @@ class DraftingSession {
       this.m_players.push(player);
     }
   }
-
+  /**
+   * @brief organize card pool into packs depending on the number of players
+   * and pack size
+   * @param card_pool
+   * @returns packs
+   */
   initializePacks(card_pool) {
     var idx = 0;
     const packs = [];
@@ -132,6 +151,38 @@ class DraftingSession {
       }
     }
     return packs;
+  }
+
+  simulateDraft() {
+    for (let round = 0; round < this.m_no_packs; round++) {
+      // cut packs equal to no_players from all packs
+      const packs_in_round = this.m_packs.slice(this.m_no_players * round,
+        Math.min((this.m_no_players * (round+1)), this.m_packs.length));
+      let i = 0;
+      for (let pick_no = 0; pick_no < this.m_pack_size; pick_no++) {
+        // loop through the players
+        for (let player_idx = 0; player_idx < this.m_no_players; player_idx++) {
+          const current_pack = packs_in_round[player_idx];
+          const player = this.m_players[player_idx];
+          const available_picks = current_pack.cardsLeft();
+          const random_idx = Math.floor(seedrandom(this.m_random_seed) * available_picks.length);
+          const chosen_card = available_picks.at(random_idx-1);
+          player.pickCard(current_pack, chosen_card.m_id_in_pack);
+        }
+        // shift packs around
+        if (round % 2 === 0) {
+          // clockwise
+          packs_in_round.push(packs_in_round.shift());
+        } else {
+          // counter-clockwise
+          packs_in_round.unshift(packs_in_round.pop());
+        }
+      }
+      // check packs are empty
+      if(packs_in_round.every(pack => pack.cardsLeft().length === 0)){
+        // console.log("all cards drafted from packs");
+      }
+    }
   }
 }
 

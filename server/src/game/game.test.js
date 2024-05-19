@@ -7,5 +7,6 @@ describe('Draft Setup', () => {
     var no_players = 8;
     var draft = new DraftingSession(pack_size, no_packs, no_players);
     draft.createSession();
+    draft.simulateDraft();
   });
 });
